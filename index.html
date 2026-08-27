@@ -14,45 +14,49 @@
     }
 
     body {
-      background: #0a1120;
+      background: #24344b;
       color: #f4e9d5;
       font-family: 'Inter', 'Helvetica Neue', -apple-system, sans-serif;
     }
 
-    /* ═══════════════ WEBGL SHADER BACKGROUND ═══════════════
-       GPU realtime fluid — zero network requests, ~10KB total */
-    #bg-canvas {
-      position: fixed;
+    /* ═══════════════ BACKGROUND — exact trade.xyz replica ═══════════════
+       Container: absolute inset:0, z-index:0, base color #24344b
+       Desktop video: hidden by default, shown >=768px
+       Mobile video: shown by default, hidden >=768px
+       Both: display:flex, absolute, 100%x100%, z-index:-1, object-fit:cover,
+             inline transform:scale(1.1)
+    ═════════════════════════════════════════════════════════════════════ */
+    .bg-container {
+      position: absolute;
       inset: 0;
       z-index: 0;
+      background-color: #24344b;
+    }
+
+    .bg-video-desktop { display: none; }
+    .bg-video-mobile {
+      display: flex;
+      position: absolute;
       width: 100%;
       height: 100%;
-      display: block;
+      top: 0;
+      left: 0;
+      z-index: -1;
+      object-fit: cover;
     }
 
-    /* CSS fallback (used only if WebGL unavailable) */
-    .bg-fallback {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      background:
-        radial-gradient(ellipse 80% 60% at 30% 40%, rgba(36, 52, 75, 0.9), transparent 70%),
-        radial-gradient(ellipse 60% 50% at 70% 65%, rgba(249, 189, 41, 0.10), transparent 70%),
-        #0a1120;
-      animation: fallbackDrift 18s ease-in-out infinite alternate;
-    }
-    @keyframes fallbackDrift {
-      from { background-position: 0% 0%, 100% 100%, 0 0; }
-      to   { background-position: 100% 50%, 0% 0%, 0 0; }
-    }
-
-    /* Subtle vignette so text stays readable over bright flow areas */
-    .bg-vignette {
-      position: fixed;
-      inset: 0;
-      z-index: 1;
-      pointer-events: none;
-      background: radial-gradient(ellipse at center, transparent 45%, rgba(5, 8, 16, 0.55) 100%);
+    @media (min-width: 768px) {
+      .bg-video-desktop {
+        display: flex;
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        z-index: -1;
+        object-fit: cover;
+      }
+      .bg-video-mobile { display: none; }
     }
 
     /* ═══════════════ CONTENT ═══════════════════════════ */
@@ -216,17 +220,31 @@
       .links { gap: 0.7rem; }
       .links a { font-size: 0.8rem; padding: 0.55rem 1rem; }
     }
-
-    @media (prefers-reduced-motion: reduce) {
-      .fallback-drift, .bg-fallback { animation: none; }
-    }
   </style>
 </head>
 <body>
 
-  <!-- WebGL shader background (CSS fallback injected if WebGL unavailable) -->
-  <canvas id="bg-canvas"></canvas>
-  <div class="bg-vignette"></div>
+  <!-- Background — exact trade.xyz structure (container + dual videos) -->
+  <div class="bg-container">
+    <video
+      class="bg-video-desktop"
+      autoplay
+      loop
+      muted
+      playsinline
+      style="transform:scale(1.1)">
+      <source src="landing-video.mp4" type="video/mp4" />
+    </video>
+    <video
+      class="bg-video-mobile"
+      autoplay
+      loop
+      muted
+      playsinline
+      style="transform:scale(1.1)">
+      <source src="landing-video-mobile.mp4" type="video/mp4" />
+    </video>
+  </div>
 
   <!-- Content -->
   <div class="content">
@@ -269,179 +287,6 @@
     </div>
 
   </div>
-
-<script>
-(function () {
-  'use strict';
-
-  var canvas = document.getElementById('bg-canvas');
-  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  var gl = canvas.getContext('webgl', { antialias: false, alpha: false })
-        || canvas.getContext('experimental-webgl', { antialias: false, alpha: false });
-
-  if (!gl) { enableFallback(); return; }
-
-  // ── Shaders ──────────────────────────────────────────────
-  var VERT = [
-    'attribute vec2 a_pos;',
-    'void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }'
-  ].join('\n');
-
-  // Domain-warped fbm flow — deep blue base with golden streams.
-  var FRAG = [
-    'precision mediump float;',
-    'uniform vec2  u_res;',
-    'uniform float u_time;',
-    'uniform vec2  u_mouse;',
-
-    // hash & value noise
-    'float hash(vec2 p) {',
-    '  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);',
-    '}',
-    'float noise(vec2 p) {',
-    '  vec2 i = floor(p);',
-    '  vec2 f = fract(p);',
-    '  vec2 u = f * f * (3.0 - 2.0 * f);',
-    '  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),',
-    '             mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);',
-    '}',
-
-    // 4-octave fractal brownian motion
-    'float fbm(vec2 p) {',
-    '  float v = 0.0;',
-    '  float a = 0.5;',
-    '  mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);',
-    '  for (int i = 0; i < 4; i++) {',
-    '    v += a * noise(p);',
-    '    p = rot * p * 2.02;',
-    '    a *= 0.5;',
-    '  }',
-    '  return v;',
-    '}',
-
-    'void main() {',
-    '  vec2 uv = gl_FragCoord.xy / u_res.xy;',
-    '  vec2 p = uv * vec2(u_res.x / u_res.y, 1.0);',
-
-    // mouse parallax: gentle warp toward cursor
-    '  vec2 m = u_mouse;',
-    '  p += 0.08 * sin(u_time * 0.12) * vec2(1.0, 0.6);',
-    '  p += 0.05 * (m - 0.5) * (1.0 - smoothstep(0.0, 1.4, distance(uv, m)));',
-
-    // domain warping (Inigo Quilez style)
-    '  float t = u_time * 0.045;',
-    '  vec2 q = vec2(fbm(p * 1.4 + t), fbm(p * 1.4 + vec2(5.2, 1.3) - t));',
-    '  vec2 r = vec2(fbm(p * 2.1 + 3.0 * q + vec2(1.7, 9.2) + t * 0.6),',
-    '                fbm(p * 2.1 + 3.0 * q + vec2(8.3, 2.8) - t * 0.4));',
-    '  float f = fbm(p * 1.8 + 2.5 * r);',
-
-    // palette: deep navy → steel blue → golden streams
-    '  vec3 c1 = vec3(0.030, 0.055, 0.110);',  // #08 0e 1c deep navy
-    '  vec3 c2 = vec3(0.130, 0.195, 0.290);',  // steel blue (#24344b family)
-    '  vec3 c3 = vec3(0.976, 0.741, 0.161);',  // gold #f9bd29
-
-    '  vec3 col = mix(c1, c2, clamp(f * f * 2.2, 0.0, 1.0));',
-
-    // golden ridges — extract thin filaments via ridged noise (r.x≈0.5 band)
-    '  float ridge = pow(max(0.0, 1.0 - abs(r.x - 0.5) * 2.4), 5.0);',
-    '  float glow  = pow(f, 3.0) * 0.5;',
-    '  col += c3 * (ridge * 0.35 + glow * 0.25);',
-
-    // top-left light bias to match hero composition
-    '  col *= 0.85 + 0.3 * (1.0 - uv.y) * (1.0 - uv.x * 0.5);',
-
-    '  gl_FragColor = vec4(col, 1.0);',
-    '}'
-  ].join('\n');
-
-  // ── Compile & link ───────────────────────────────────────
-  function compile(type, src) {
-    var s = gl.createShader(type);
-    gl.shaderSource(s, src);
-    gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-      console.error('shader:', gl.getShaderInfoLog(s));
-      return null;
-    }
-    return s;
-  }
-
-  var vs = compile(gl.VERTEX_SHADER, VERT);
-  var fs = compile(gl.FRAGMENT_SHADER, FRAG);
-  if (!vs || !fs) { enableFallback(); return; }
-
-  var prog = gl.createProgram();
-  gl.attachShader(prog, vs);
-  gl.attachShader(prog, fs);
-  gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { enableFallback(); return; }
-  gl.useProgram(prog);
-
-  // fullscreen triangle
-  var buf = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-  var loc = gl.getAttribLocation(prog, 'a_pos');
-  gl.enableVertexAttribArray(loc);
-  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-
-  var uRes = gl.getUniformLocation(prog, 'u_res');
-  var uTime = gl.getUniformLocation(prog, 'u_time');
-  var uMouse = gl.getUniformLocation(prog, 'u_mouse');
-
-  // ── Resize (DPR capped for perf) ─────────────────────────
-  var mouse = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5 };
-
-  function resize() {
-    var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-    canvas.width = Math.floor(innerWidth * dpr);
-    canvas.height = Math.floor(innerHeight * dpr);
-    gl.viewport(0, 0, canvas.width, canvas.height);
-  }
-  window.addEventListener('resize', resize);
-  resize();
-
-  // ── Mouse (lerped parallax) ──────────────────────────────
-  window.addEventListener('pointermove', function (e) {
-    mouse.tx = e.clientX / innerWidth;
-    mouse.ty = 1.0 - e.clientY / innerHeight;
-  }, { passive: true });
-
-  // ── Render loop ──────────────────────────────────────────
-  var start = performance.now();
-  var running = true;
-
-  document.addEventListener('visibilitychange', function () {
-    running = !document.hidden;
-    if (running) requestAnimationFrame(frame);
-  });
-
-  function frame(now) {
-    if (!running) return;
-    // lerp mouse for smooth drift
-    mouse.x += (mouse.tx - mouse.x) * 0.04;
-    mouse.y += (mouse.ty - mouse.y) * 0.04;
-
-    gl.uniform2f(uRes, canvas.width, canvas.height);
-    gl.uniform1f(uTime, reduced ? 40.0 : (now - start) / 1000);
-    gl.uniform2f(uMouse, mouse.x, mouse.y);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
-
-  // ── CSS fallback if WebGL fails ──────────────────────────
-  function enableFallback() {
-    if (!document.querySelector('.bg-fallback')) {
-      var d = document.createElement('div');
-      d.className = 'bg-fallback';
-      document.body.insertBefore(d, document.body.firstChild);
-    }
-    if (canvas) canvas.style.display = 'none';
-  }
-})();
-</script>
 
 </body>
 </html>
