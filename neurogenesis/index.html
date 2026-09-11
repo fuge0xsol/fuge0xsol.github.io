@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEUROGENESIS · 活体大脑模拟引擎</title>
+<meta name="description" content="NEUROGENESIS —— 一台跑在浏览器里的生物大脑模拟 AI：14.8 万神经元、960 万突触、实时转录的 DNA 分子层。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Noto+Serif+SC:wght@600;700&display=swap">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🧠</text></svg>">
+<style>
+:root{
+  --bg:#04090c;
+  --bg2:#071016;
+  --panel:rgba(10,22,26,.55);
+  --ink:#d9ffe9;
+  --dim:#6fae94;
+  --faint:#3d6b58;
+  --acc:#3dffb0;
+  --acc2:#5ee6ff;
+  --amber:#ffc247;
+  --violet:#a78bff;
+  --pink:#ff7eb6;
+  --red:#ff5e7a;
+  --line:rgba(61,255,176,.16);
+  --line2:rgba(61,255,176,.08);
+  --mono:ui-monospace,'Cascadia Code','JetBrains Mono',Consolas,'Courier New',monospace;
+  --serif:'Instrument Serif',Georgia,'Times New Roman',serif;
+  --disp:'Noto Serif SC','Instrument Serif',Georgia,'STSong','SimSun',serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--mono);
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:rgba(61,255,176,.28)}
+::-webkit-scrollbar{width:9px}
+::-webkit-scrollbar-track{background:#050b0e}
+::-webkit-scrollbar-thumb{background:#1a3d31;border:2px solid #050b0e;border-radius:6px}
+::-webkit-scrollbar-thumb:hover{background:#2a5f4c}
+
+/* ---------- background layers ---------- */
+.grid-bg{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(61,255,176,.07), transparent 60%),
+    radial-gradient(900px 600px at 85% 110%, rgba(94,230,255,.05), transparent 60%),
+    linear-gradient(rgba(61,255,176,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(61,255,176,.035) 1px, transparent 1px);
+  background-size:auto,auto,52px 52px,52px 52px;
+}
+body::after{ /* film grain / scanlines */
+  content:"";position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.5;
+  background:repeating-linear-gradient(0deg, transparent 0 3px, rgba(0,0,0,.10) 3px 4px);
+  mix-blend-mode:overlay;
+}
+
+/* ---------- top bar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:50;
+  display:flex;align-items:center;gap:22px;
+  padding:10px 22px;
+  background:rgba(4,9,12,.78);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+  font-size:11px;letter-spacing:.08em;
+  white-space:nowrap;
+}
+.topbar .brand{display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:700;letter-spacing:.18em;color:var(--acc)}
+.topbar .brand .orb{width:9px;height:9px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px var(--acc);animation:pulse 1.8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.topbar nav{display:flex;gap:18px;margin-left:8px}
+.topbar nav a{color:var(--dim);text-decoration:none;transition:color .2s}
+.topbar nav a:hover{color:var(--acc)}
+.topbar .spacer{flex:1}
+.topbar .meta{color:var(--faint);display:flex;gap:18px}
+.topbar .meta b{color:var(--dim);font-weight:400}
+.topbar .live{color:var(--acc);display:flex;align-items:center;gap:6px}
+.topbar .live i{width:6px;height:6px;border-radius:50%;background:var(--acc);box-shadow:0 0 8px var(--acc);animation:pulse 1.4s infinite}
+@media(max-width:960px){.topbar .meta span.hide-m{display:none}.topbar nav{display:none}}
+
+/* ---------- hero ---------- */
+.hero{position:relative;height:96vh;min-height:600px;z-index:1;user-select:none}
+#brain{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;touch-action:none}
+.hero-inner{
+  position:absolute;inset:0;pointer-events:none;
+  display:flex;flex-direction:column;justify-content:flex-end;
+  padding:0 6vw 9vh;
+}
+.eyebrow{font-size:11px;letter-spacing:.32em;color:var(--acc);margin-bottom:18px;display:flex;align-items:center;gap:10px}
+.eyebrow::before{content:"";width:34px;height:1px;background:var(--acc);box-shadow:0 0 8px var(--acc)}
+.hero h1{
+  font-family:var(--disp);
+  font-size:clamp(34px,5.4vw,72px);line-height:1.16;font-weight:700;
+  letter-spacing:.01em;text-shadow:0 0 40px rgba(61,255,176,.25);
+}
+.hero h1 em{font-style:normal;color:var(--acc);text-shadow:0 0 26px rgba(61,255,176,.55)}
+.hero .sub{max-width:620px;margin-top:20px;color:var(--dim);font-size:13px;line-height:2}
+.hero .cta{margin-top:30px;display:flex;gap:14px;flex-wrap:wrap}
+.btn{
+  pointer-events:auto;cursor:pointer;
+  font-family:var(--mono);font-size:12.5px;letter-spacing:.14em;
+  padding:13px 24px;border:1px solid var(--acc);color:var(--acc);
+  background:rgba(61,255,176,.07);text-decoration:none;
+  position:relative;transition:.22s;overflow:hidden;
+}
+.btn:hover{background:var(--acc);color:#03110a;box-shadow:0 0 26px rgba(61,255,176,.45)}
+.btn.ghost{border-color:rgba(111,174,148,.5);color:var(--dim);background:transparent}
+.btn.ghost:hover{border-color:var(--acc2);color:var(--acc2);background:rgba(94,230,255,.06);box-shadow:0 0 22px rgba(94,230,255,.3)}
+.hero .hint{
+  position:absolute;right:6vw;bottom:9vh;text-align:right;
+  color:var(--faint);font-size:11px;line-height:2.1;letter-spacing:.1em;
+}
+.hero .hint b{color:var(--dim);font-weight:400}
+.corner{position:absolute;width:22px;height:22px;border:1px solid rgba(61,255,176,.4);pointer-events:none}
+.corner.tl{top:86px;left:22px;border-right:0;border-bottom:0}
+.corner.tr{top:86px;right:22px;border-left:0;border-bottom:0}
+.corner.bl{bottom:22px;left:22px;border-right:0;border-top:0}
+.corner.br{bottom:22px;right:22px;border-left:0;border-top:0}
+#flash{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(closest-side at 50% 45%, transparent 55%, rgba(255,194,71,.22));transition:opacity .18s}
+#flash.on{opacity:1;transition:opacity .04s}
+
+/* ---------- sections ---------- */
+main{position:relative;z-index:1}
+section.block{max-width:1180px;margin:0 auto;padding:96px 6vw 30px;scroll-margin-top:70px}
+.shead{display:flex;align-items:center;gap:16px;margin-bottom:14px}
+.shead .idx{color:var(--acc);font-size:12px;letter-spacing:.2em}
+.shead .lab{color:var(--faint);font-size:11px;letter-spacing:.28em}
+.shead .rule{flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+section h2{font-family:var(--disp);font-size:clamp(22px,2.8vw,34px);letter-spacing:.03em;margin-bottom:10px;font-weight:700}
+section .desc{color:var(--dim);font-size:12.5px;line-height:2;max-width:640px;margin-bottom:36px}
+
+.panel{
+  border:1px solid var(--line);background:var(--panel);
+  background-image:radial-gradient(rgba(61,255,176,.05) 1px, transparent 1.4px);
+  background-size:22px 22px;
+  backdrop-filter:blur(4px);position:relative;
+}
+.panel::before,.panel::after{
+  content:"";position:absolute;width:8px;height:8px;border:1px solid var(--acc);opacity:.7;
+}
+.panel::before{top:-1px;left:-1px;border-right:0;border-bottom:0}
+.panel::after{bottom:-1px;right:-1px;border-left:0;border-top:0}
+.panel .phead{
+  display:flex;align-items:center;gap:10px;padding:10px 16px;
+  border-bottom:1px solid var(--line2);font-size:10.5px;letter-spacing:.24em;color:var(--dim);
+}
+.panel .phead i{width:6px;height:6px;border-radius:50%;background:var(--acc);animation:pulse 1.6s infinite;box-shadow:0 0 8px var(--acc)}
+
+/* telemetry */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
+.stat{padding:18px 18px 12px;transition:border-color .3s}
+.stat:hover{border-color:rgba(61,255,176,.45)}
+.stat .sl{font-size:10.5px;letter-spacing:.2em;color:var(--faint);display:flex;justify-content:space-between}
+.stat .sv{font-size:clamp(24px,2.6vw,34px);font-weight:700;color:var(--acc);margin:10px 0 6px;text-shadow:0 0 18px rgba(61,255,176,.35);font-variant-numeric:tabular-nums}
+.stat:nth-child(2) .sv{color:var(--acc2);text-shadow:0 0 18px rgba(94,230,255,.3)}
+.stat:nth-child(3) .sv{color:var(--violet);text-shadow:0 0 18px rgba(167,139,255,.3)}
+.stat:nth-child(4) .sv{color:var(--amber);text-shadow:0 0 18px rgba(255,194,71,.3)}
+.stat canvas{width:100%;height:34px;display:block;opacity:.9}
+
+/* console */
+.console-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:14px;align-items:stretch}
+.stim-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:18px}
+.stim{
+  cursor:pointer;text-align:left;font-family:var(--mono);color:var(--ink);
+  border:1px solid var(--line);background:rgba(6,15,18,.6);padding:18px 16px;
+  transition:.22s;position:relative;overflow:hidden;
+}
+.stim .ic{font-size:20px;display:block;margin-bottom:10px;filter:drop-shadow(0 0 8px rgba(61,255,176,.4))}
+.stim .sn{font-size:13px;font-weight:700;letter-spacing:.1em;color:var(--acc)}
+.stim .sd{display:block;margin-top:8px;font-size:11px;line-height:1.8;color:var(--faint);transition:color .22s}
+.stim:hover{border-color:var(--acc);background:rgba(61,255,176,.08);transform:translateY(-2px);box-shadow:0 6px 24px rgba(61,255,176,.12)}
+.stim:hover .sd{color:var(--dim)}
+.stim:active{transform:translateY(0) scale(.98)}
+.stim.fired{animation:fired .5s}
+@keyframes fired{0%{box-shadow:0 0 0 0 rgba(61,255,176,.55)}100%{box-shadow:0 0 0 18px rgba(61,255,176,0)}}
+.log-panel{display:flex;flex-direction:column;min-height:100%}
+#stream{padding:14px 16px;overflow-y:auto;flex:1;max-height:340px;min-height:300px}
+.log-line{font-size:11px;line-height:1.7;padding:5px 0;border-bottom:1px dashed rgba(61,255,176,.07);animation:slidein .4s;display:flex;gap:10px;align-items:baseline}
+@keyframes slidein{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+.log-line .lt{color:#2f5a49;flex-shrink:0}
+.log-line .tag{flex-shrink:0;font-size:10px;padding:1px 7px;border:1px solid;letter-spacing:.1em}
+.tag-sense{color:var(--acc2);border-color:rgba(94,230,255,.4)}
+.tag-motor{color:var(--amber);border-color:rgba(255,194,71,.4)}
+.tag-learn{color:var(--pink);border-color:rgba(255,126,182,.4)}
+.tag-sys{color:var(--faint);border-color:rgba(111,174,148,.35)}
+.tag-stim{color:var(--acc);border-color:rgba(61,255,176,.45)}
+.log-line .lm{color:var(--dim);word-break:break-all}
+
+/* atlas */
+.atlas-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}
+.atlas-viz{position:relative;min-height:520px}
+#brain2{position:absolute;inset:0;width:100%;height:100%;cursor:grab;touch-action:none}
+.atlas-viz .vhint{position:absolute;left:14px;bottom:12px;font-size:10px;color:var(--faint);letter-spacing:.14em;pointer-events:none}
+.region-list{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px}
+.region{
+  cursor:pointer;border:1px solid var(--line2);background:rgba(6,15,18,.5);
+  padding:12px 14px;transition:.2s;position:relative;
+}
+.region .rn{font-size:12.5px;font-weight:700;letter-spacing:.08em}
+.region .re{font-size:9.5px;letter-spacing:.2em;color:var(--faint);margin-top:4px}
+.region .rc{position:absolute;top:10px;right:12px;width:8px;height:8px;border-radius:50%}
+.region:hover{border-color:var(--line);transform:translateX(3px)}
+.region.on{border-color:var(--acc);background:rgba(61,255,176,.08);box-shadow:0 0 20px rgba(61,255,176,.12) inset}
+#region-info{margin:0 16px 16px;padding:16px;border:1px solid var(--line2);background:rgba(6,15,18,.5)}
+#region-info .ri-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+#region-info .ri-cn{font-size:15px;font-weight:800;color:var(--acc)}
+#region-info .ri-en{font-size:10px;letter-spacing:.24em;color:var(--faint)}
+#region-info .ri-desc{font-size:11.5px;line-height:1.95;color:var(--dim);min-height:66px}
+#region-info .ri-stats{display:flex;gap:22px;margin-top:12px;font-size:10.5px;color:var(--faint);letter-spacing:.1em}
+#region-info .ri-stats b{color:var(--ink);font-weight:400;font-variant-numeric:tabular-nums}
+.actbar{margin-top:12px;height:3px;background:rgba(61,255,176,.12);position:relative;overflow:hidden}
+.actbar i{position:absolute;left:0;top:0;bottom:0;background:var(--acc);box-shadow:0 0 10px var(--acc);animation:actflow 2.4s ease-in-out infinite alternate}
+@keyframes actflow{from{width:18%}to{width:87%}}
+
+/* how */
+.how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.how{padding:24px 20px;transition:.25s}
+.how:hover{border-color:rgba(61,255,176,.4);transform:translateY(-4px)}
+.how .hn{color:var(--faint);font-size:11px;letter-spacing:.2em}
+.how h3{margin:14px 0 4px;font-size:16px;letter-spacing:.06em}
+.how .he{font-size:10px;letter-spacing:.22em;color:var(--acc);margin-bottom:14px}
+.how p{font-size:11.5px;line-height:2;color:var(--dim)}
+.how .wave{margin-top:16px;height:26px;width:100%;opacity:.8}
+
+/* roadmap */
+.rm{border:1px solid var(--line2);border-top:0;transition:background .25s}
+.rm:first-of-type{border-top:1px solid var(--line2)}
+.rm:hover{background:rgba(61,255,176,.045)}
+.rm-in{display:grid;grid-template-columns:70px 1fr auto;gap:18px;align-items:center;padding:20px 22px}
+.rm .ri{color:var(--faint);font-size:20px;font-weight:300}
+.rm.done .ri{color:var(--acc)}
+.rm h4{font-size:14px;letter-spacing:.06em;font-weight:700}
+.rm p{color:var(--faint);font-size:11px;margin-top:6px;line-height:1.8}
+.chip{font-size:10px;letter-spacing:.18em;padding:5px 12px;border:1px solid;white-space:nowrap}
+.chip.done{color:var(--acc);border-color:rgba(61,255,176,.5);background:rgba(61,255,176,.07)}
+.chip.doing{color:var(--amber);border-color:rgba(255,194,71,.5);background:rgba(255,194,71,.06);animation:pulse 2.2s infinite}
+.chip.plan{color:var(--faint);border-color:rgba(111,174,148,.3)}
+
+/* limits */
+.limits{padding:26px 26px 22px}
+.limits li{list-style:none;display:flex;gap:14px;padding:12px 0;border-bottom:1px dashed rgba(61,255,176,.08);font-size:12px;line-height:1.9;color:var(--dim)}
+.limits li:last-child{border-bottom:0}
+.limits li::before{content:"▲";color:var(--amber);font-size:9px;margin-top:6px;flex-shrink:0}
+.limits b{color:var(--ink);font-weight:400}
+
+/* footer */
+footer{position:relative;z-index:1;margin-top:90px;border-top:1px solid var(--line);padding:44px 6vw 54px;background:rgba(4,9,12,.7)}
+footer .fgrid{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:30px}
+footer .fb{color:var(--acc);font-weight:800;letter-spacing:.2em;font-size:14px}
+footer p{color:var(--faint);font-size:11px;line-height:2;margin-top:12px;max-width:420px}
+footer h5{color:var(--dim);font-size:10.5px;letter-spacing:.26em;margin-bottom:14px;font-weight:400}
+footer a{display:block;color:var(--dim);font-size:11.5px;text-decoration:none;padding:4px 0;transition:.2s}
+footer a:hover{color:var(--acc);transform:translateX(4px)}
+footer .fbottom{max-width:1180px;margin:34px auto 0;padding-top:18px;border-top:1px solid var(--line2);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:#2f5a49;font-size:10.5px;letter-spacing:.12em}
+
+/* ---------- biotech additions ---------- */
+.mol-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.85;z-index:0}
+.hero .ruler{
+  position:absolute;left:0;right:0;bottom:0;height:16px;pointer-events:none;opacity:.55;z-index:2;
+  background:
+    repeating-linear-gradient(90deg,rgba(61,255,176,.45) 0 1px,transparent 1px 200px),
+    repeating-linear-gradient(90deg,rgba(61,255,176,.28) 0 1px,transparent 1px 40px);
+  background-size:auto 12px,auto 6px;background-position:bottom left,bottom left;background-repeat:repeat-x;
+}
+/* 分子层 */
+.mol-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}
+.mol-panel{position:relative;overflow:hidden}
+.gene-list{padding:16px;display:grid;gap:15px}
+.gene{display:grid;grid-template-columns:110px 1fr 44px;gap:12px;align-items:center;font-size:11px}
+.gene .gid{color:var(--acc);font-weight:700;letter-spacing:.06em}
+.gene .gcn{color:var(--faint);font-size:9.5px;display:block;margin-top:3px;line-height:1.5}
+.gene .gtrack{height:5px;background:rgba(61,255,176,.10);position:relative;overflow:hidden}
+.gene .gfill{position:absolute;left:0;top:0;bottom:0;width:0;
+  background:linear-gradient(90deg,rgba(61,255,176,.30),var(--acc));
+  box-shadow:0 0 10px rgba(61,255,176,.45);transition:width .5s ease}
+.gene .gval{text-align:right;color:var(--dim);font-variant-numeric:tabular-nums}
+.gene-note{padding:0 16px 14px;color:#2f5a49;font-size:9.5px;letter-spacing:.08em}
+.helix-cap{position:absolute;right:12px;bottom:10px;color:var(--faint);font-size:9.5px;letter-spacing:.18em;pointer-events:none}
+
+/* reveal on scroll */
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .8s ease,transform .8s ease}
+.reveal.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){
+  .reveal{opacity:1;transform:none;transition:none}
+  body::after{display:none}
+}
+
+@media(max-width:900px){
+  .stat-grid{grid-template-columns:1fr 1fr}
+  .console-grid,.atlas-grid,.how-grid,.mol-grid{grid-template-columns:1fr}
+  .atlas-viz{min-height:380px}
+  footer .fgrid{grid-template-columns:1fr}
+  .hero .hint{display:none}
+  .rm-in{grid-template-columns:50px 1fr;grid-template-rows:auto auto}
+  .rm .chip{grid-column:2}
+}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<!-- ======= 顶部状态栏 ======= -->
+<header class="topbar">
+  <div class="brand"><span class="orb"></span>NEUROGENESIS</div>
+  <nav>
+    <a href="#telemetry">遥测</a>
+    <a href="#console">控制台</a>
+    <a href="#atlas">脑区图谱</a>
+    <a href="#molecular">分子层</a>
+    <a href="#how">原理</a>
+    <a href="#roadmap">路线图</a>
+  </nav>
+  <div class="spacer"></div>
+  <div class="meta">
+    <span>SPEC-042 · 数字双胞胎标本</span>
+    <span class="hide-m">神经元 <b>148,203</b></span>
+    <span class="hide-m">突触 <b>≈9.6M</b></span>
+    <span id="clock">--:--:--</span>
+  </div>
+  <div class="live"><i></i>LIVE</div>
+</header>
+
+<!-- ======= 主视觉 ======= -->
+<section class="hero" id="top">
+  <canvas id="mol" class="mol-canvas"></canvas>
+  <canvas id="brain"></canvas>
+  <div id="flash"></div>
+  <span class="corner tl"></span><span class="corner tr"></span>
+  <span class="corner bl"></span><span class="corner br"></span>
+  <div class="hero-inner">
+    <div class="eyebrow">BIOLOGICAL BRAIN SIMULATION AI · REAL-TIME ORGANISM</div>
+    <h1>148,203 个神经元<br><em>正在你的浏览器里放电</em></h1>
+    <p class="sub">NEUROGENESIS 是一台跑在网页里的生物大脑模拟 AI —— 14.8 万个数字神经元、约 960 万个突触，连同膜电位、神经递质与基因表达，全部实时演算在你的设备上。拖动它、刺激它，看它作出反应。</p>
+    <div class="cta">
+      <a class="btn" href="#console">打开刺激控制台 →</a>
+      <a class="btn ghost" href="#molecular">潜入分子层</a>
+    </div>
+  </div>
+  <div class="hint">
+    <b>拖拽</b> 旋转脑组织<br>
+    <b>移动光标</b> 电刺激神经元<br>
+    <b>点击</b> 触发放电爆发
+  </div>
+  <div class="ruler"></div>
+</section>
+
+<main>
+  <!-- ======= 01 实时遥测 ======= -->
+  <section class="block" id="telemetry">
+    <div class="shead reveal"><span class="idx">01</span><span class="lab">TELEMETRY</span><span class="rule"></span></div>
+    <h2 class="reveal">实时遥测</h2>
+    <p class="desc reveal">以下读数由本页模拟核心每帧更新。数字不是预录的 —— 它们正在被计算，就像此刻正在你眼前放电的那颗大脑。</p>
+    <div class="stat-grid">
+      <div class="panel stat reveal"><div class="sl"><span>峰值放电率</span><span>SPIKES/S</span></div><div class="sv" id="stat-spike">--</div><canvas id="spark-spike"></canvas></div>
+      <div class="panel stat reveal"><div class="sl"><span>平均膜电位</span><span>mV</span></div><div class="sv" id="stat-volt">--</div><canvas id="spark-volt"></canvas></div>
+      <div class="panel stat reveal"><div class="sl"><span>活跃突触</span><span>ACTIVE</span></div><div class="sv" id="stat-syn">--</div><canvas id="spark-syn"></canvas></div>
+      <div class="panel stat reveal"><div class="sl"><span>多巴胺浓度</span><span>nM</span></div><div class="sv" id="stat-dopa">--</div><canvas id="spark-dopa"></canvas></div>
+    </div>
+    <div class="panel reveal">
+      <div class="phead"><i></i>多通道脑电 · LOCAL FIELD POTENTIAL</div>
+      <canvas id="eeg" style="width:100%;height:170px;display:block"></canvas>
+    </div>
+  </section>
+
+  <!-- ======= 02 刺激控制台 ======= -->
+  <section class="block" id="console">
+    <div class="shead reveal"><span class="idx">02</span><span class="lab">STIMULATION CONSOLE</span><span class="rule"></span></div>
+    <h2 class="reveal">刺激控制台</h2>
+    <p class="desc reveal">向标本注入四种刺激之一，观察放电级联、递质浓度与脑电波的连锁反应。每一次操作都会被写入右侧事件流。</p>
+    <div class="console-grid">
+      <div class="panel reveal">
+        <div class="phead"><i></i>刺激协议 · STIM PROTOCOLS</div>
+        <div class="stim-grid">
+          <button class="stim" data-stim="burst">
+            <span class="ic">⚡</span><span class="sn">电刺激</span>
+            <span class="sd">对随机皮层位点注入 80μA 脉冲串，诱发局部放电爆发与级联传导。</span>
+          </button>
+          <button class="stim" data-stim="da">
+            <span class="ic">🧪</span><span class="sn">多巴胺灌注</span>
+            <span class="sd">提高全局递质浓度，神经元兴奋阈值下降，自发放电显著升高。</span>
+          </button>
+          <button class="stim" data-stim="memory">
+            <span class="ic">💾</span><span class="sn">记忆写入</span>
+            <span class="sd">沿海马体纵轴顺序激活神经元的印记回路，写入一段情节记忆轨迹。</span>
+          </button>
+          <button class="stim" data-stim="ltp">
+            <span class="ic">🧬</span><span class="sn">突触强化</span>
+            <span class="sd">触发长时程增强（LTP），全脑连接权重上调，通路亮度提升。</span>
+          </button>
+        </div>
+      </div>
+      <div class="panel log-panel reveal">
+        <div class="phead"><i></i>事件流 · EVENT STREAM</div>
+        <div id="stream"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======= 03 脑区图谱 ======= -->
+  <section class="block" id="atlas">
+    <div class="shead reveal"><span class="idx">03</span><span class="lab">REGION ATLAS</span><span class="rule"></span></div>
+    <h2 class="reveal">脑区图谱</h2>
+    <p class="desc reveal">标本被划分为七个功能区。选择一个脑区，右侧结构会单独点亮 —— 完整标本 148,203 个神经元，此处渲染为约 1,400 个采样单位。</p>
+    <div class="atlas-grid">
+      <div class="panel atlas-viz reveal">
+        <canvas id="brain2"></canvas>
+        <div class="vhint">DRAG TO ROTATE</div>
+      </div>
+      <div class="panel reveal">
+        <div class="phead"><i></i>功能区 · REGIONS</div>
+        <div class="region-list" id="region-list"></div>
+        <div id="region-info">
+          <div class="ri-head"><span class="ri-cn" id="ri-cn">--</span><span class="ri-en" id="ri-en">--</span></div>
+          <div class="ri-desc" id="ri-desc"></div>
+          <div class="ri-stats">
+            <span>神经元 <b id="ri-count">--</b></span>
+            <span>占比 <b id="ri-pct">--</b></span>
+            <span>状态 <b id="ri-state">实时监测中</b></span>
+          </div>
+          <div class="actbar"><i id="ri-bar"></i></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======= 04 分子层 ======= -->
+  <section class="block" id="molecular">
+    <div class="shead reveal"><span class="idx">04</span><span class="lab">MOLECULAR LAYER</span><span class="rule"></span></div>
+    <h2 class="reveal">分子层</h2>
+    <p class="desc reveal">再往下钻一层：电信号的背后是分子。左侧双螺旋正在实时转录，右侧五支探针追踪靶基因的表达水平 —— 每一次刺激，都会在基因组上留下痕迹。</p>
+    <div class="mol-grid">
+      <div class="panel mol-panel reveal">
+        <div class="phead"><i></i>DNA 双螺旋 · TRANSCRIPTION LIVE</div>
+        <canvas id="helix" style="width:100%;height:250px;display:block"></canvas>
+        <div class="helix-cap">A-T · G-C · 转录脉冲循环中</div>
+      </div>
+      <div class="panel reveal">
+        <div class="phead"><i></i>基因表达探针 · GENE EXPRESSION</div>
+        <div class="gene-list" id="gene-list"></div>
+        <div class="gene-note">// 探针读数为演示值 · 由刺激协议实时驱动响应</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======= 05 工作原理 ======= -->
+  <section class="block" id="how">
+    <div class="shead reveal"><span class="idx">05</span><span class="lab">HOW IT WORKS</span><span class="rule"></span></div>
+    <h2 class="reveal">它如何工作</h2>
+    <p class="desc reveal">三个子系统构成一个闭环：世界进来变成电，电变成权重，权重变成动作。</p>
+    <div class="how-grid">
+      <div class="panel how reveal">
+        <div class="hn">子系统 A</div>
+        <h3>感知编码</h3><div class="he">PERCEPTION ENCODING</div>
+        <p>外部输入被转换为一列列动作电位，沿丘脑通路涌入皮层。光强变成频率，频率变成表征 —— 标本用它"看见"投喂给它的信号。</p>
+        <canvas class="wave" data-wave="sense"></canvas>
+      </div>
+      <div class="panel how reveal">
+        <div class="hn">子系统 B</div>
+        <h3>突触可塑性</h3><div class="he">SYNAPTIC PLASTICITY</div>
+        <p>脉冲时序依赖可塑性（STDP）持续改写连接权重：一起放电的神经元被绑定，先后错位的被削弱。多巴胺信号作为第三因子，告诉它什么值得记住。</p>
+        <canvas class="wave" data-wave="learn"></canvas>
+      </div>
+      <div class="panel how reveal">
+        <div class="hn">子系统 C</div>
+        <h3>运动解码</h3><div class="he">MOTOR DECODING</div>
+        <p>下游输出群把皮层状态翻译成连续指令流：转向角、推进增益、停止判定。遥测面板里每一次"运动"事件，都是这条通路的一次真实发放。</p>
+        <canvas class="wave" data-wave="motor"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======= 06 路线图 ======= -->
+  <section class="block" id="roadmap">
+    <div class="shead reveal"><span class="idx">06</span><span class="lab">ROADMAP</span><span class="rule"></span></div>
+    <h2 class="reveal">培育计划</h2>
+    <p class="desc reveal">从一颗合成神经元到全脑尺度，八个阶段。状态是真实的：完成的不会假装在进行。</p>
+    <div class="reveal">
+      <div class="rm done"><div class="rm-in"><span class="ri">01</span><div><h4>神经元形态合成</h4><p>生成具备轴突-树突极性的形态学单元，构建放电动力学模型。</p></div><span class="chip done">已完成</span></div></div>
+      <div class="rm done"><div class="rm-in"><span class="ri">02</span><div><h4>连接组稀疏重建</h4><p>按距离与区域先验生成约 9.6M 突触的稀疏连接图。</p></div><span class="chip done">已完成</span></div></div>
+      <div class="rm done"><div class="rm-in"><span class="ri">03</span><div><h4>实时放电动力学</h4><p>浏览器内逐帧求解膜电位，动作电位以脉冲沿突触传播。</p></div><span class="chip done">已完成</span></div></div>
+      <div class="rm doing"><div class="rm-in"><span class="ri">04</span><div><h4>多巴胺奖励回路</h4><p>引入价值信号门控的可塑性规则，让标本从刺激中学习偏好。</p></div><span class="chip doing">进行中</span></div></div>
+      <div class="rm doing"><div class="rm-in"><span class="ri">05</span><div><h4>视觉流实时编码</h4><p>把摄像头/页面像素编码为动作电位序列，实现真正的"看"。</p></div><span class="chip doing">进行中</span></div></div>
+      <div class="rm"><div class="rm-in"><span class="ri">06</span><div><h4>长时程记忆固化</h4><p>睡眠式重放：把海马体印记逐步固化到皮层慢变量中。</p></div><span class="chip plan">规划中</span></div></div>
+      <div class="rm"><div class="rm-in"><span class="ri">07</span><div><h4>全脑尺度扩展</h4><p>GPU 求解器扩容至 10⁶ 神经元 / 10⁸ 突触量级。</p></div><span class="chip plan">规划中</span></div></div>
+      <div class="rm"><div class="rm-in"><span class="ri">08</span><div><h4>开放 API 与数据集</h4><p>放电记录、连接组与权重快照打包公开，供任何人下载研究。</p></div><span class="chip plan">规划中</span></div></div>
+    </div>
+  </section>
+
+  <!-- ======= 07 边界 ======= -->
+  <section class="block" id="limits">
+    <div class="shead reveal"><span class="idx">07</span><span class="lab">STATED PLAINLY</span><span class="rule"></span></div>
+    <h2 class="reveal">它不是什么，直说</h2>
+    <p class="desc reveal">把能力边界说清楚，是这个实验的一部分。</p>
+    <ul class="panel limits reveal">
+      <li><span><b>没有意识。</b>数字神经元的放电只是数学在走，这里没有任何主观体验、感受或痛苦。</span></li>
+      <li><span><b>不是真实大脑。</b>它不基于任何真实个体的扫描数据，结构由程序按生物学先验合成。</span></li>
+      <li><span><b>数值是演示。</b>遥测面板中的放电率、膜电位与递质浓度由本页实时生成，不是实验记录，不构成任何科学结论。</span></li>
+      <li><span><b>分子层是示意。</b>DNA 双螺旋与基因表达探针属于可视化叙事：读数由刺激协议驱动，不对应任何真实测序数据。</span></li>
+      <li><span><b>它完全本地。</b>没有服务器、没有上传，全部计算发生在打开这个页面的设备里，关掉标签页它就死去。</span></li>
+      <li><span><b>"学习"是拟合。</b>权重在变，行为在变，但距离任何严格意义上的智能都很遥远。</span></li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <div class="fgrid">
+    <div>
+      <div class="fb">◉ NEUROGENESIS</div>
+      <p>一台跑在浏览器里的活体大脑模拟引擎。致意连接组学（Connectomics）的公开科学 —— 那些一像素一像素重建神经回路的人。</p>
+    </div>
+    <div>
+      <h5>索引</h5>
+      <a href="#telemetry">01 · 实时遥测</a>
+      <a href="#console">02 · 刺激控制台</a>
+      <a href="#atlas">03 · 脑区图谱</a>
+      <a href="#molecular">04 · 分子层</a>
+      <a href="#roadmap">06 · 培育计划</a>
+    </div>
+    <div>
+      <h5>技术</h5>
+      <a href="#top">Canvas 2D 渲染核心</a>
+      <a href="#top">零依赖 · 单文件</a>
+      <a href="#limits">透明度声明</a>
+    </div>
+  </div>
+  <div class="fbottom">
+    <span>NEUROGENESIS SPEC-042 · 纯前端演示</span>
+    <span>所有数据由程序实时生成 · 不代表真实生物体</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+'use strict';
+const TAU = Math.PI*2;
+const clamp = (v,a,b)=>v<a?a:v>b?b:v;
+function mulberry(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function hexRGB(h){const n=parseInt(h.slice(1),16);return[(n>>16)&255,(n>>8)&255,n&255];}
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ================= 脑区定义 ================= */
+const REGIONS = {
+  frontal:    {cn:'前额叶皮层', en:'FRONTAL CORTEX', color:'#3dffb0', count:31208,
+    desc:'决策与抑制控制的中枢。整合多巴胺信号与工作记忆，在"行动 / 等待"之间作出仲裁 —— 电刺激此处会诱发强烈的探索性转向。'},
+  parietal:   {cn:'顶叶联合皮层', en:'PARIETAL ASSOC.', color:'#5ee6ff', count:22470,
+    desc:'空间坐标系的主人。把视觉、触觉与本体感觉缝合进同一张身体地图，损伤它，世界会从一半悄悄消失。'},
+  temporal:   {cn:'颞叶皮层', en:'TEMPORAL LOBE', color:'#ffc247', count:24966,
+    desc:'物体识别与记忆编码的枢纽。面孔、声音、名字在此汇合；它也是癫痫最喜欢点燃的地方。'},
+  occipital:  {cn:'枕叶视觉皮层', en:'OCCIPITAL (V1)', color:'#a78bff', count:18342,
+    desc:'视觉的入口。视网膜信号首先抵达这里，被分解成边缘、朝向与运动，再逐级重组成"看见"。'},
+  cerebellum: {cn:'小脑', en:'CEREBELLUM', color:'#ff7eb6', count:26110,
+    desc:'全身神经元的半数以上挤在这占体积一成的结构里。它不发起动作，只负责让每个动作准时、平滑、可以预测。'},
+  hippocampus:{cn:'海马体', en:'HIPPOCAMPUS', color:'#7cff6b', count:12844,
+    desc:'情节记忆的书写者。位置细胞沿轨迹依次放电，把"此刻"压印成可以重放的印记 —— 记忆写入协议的目标靶区。'},
+  brainstem:  {cn:'脑干', en:'BRAINSTEM', color:'#ff5e7a', count:12263,
+    desc:'呼吸、心率、觉醒节律的古老核心。意识 Up-Down 的总开关 —— 它停摆一秒，其余一切立刻下线。'}
+};
+
+/* ================= 生成脑形点云 ================= */
+function buildBrain(){
+  const R = mulberry(20421);
+  const pts = [];
+  const add = (x,y,z,r)=>pts.push({p:[x,y,z], r:r, e:0, cool:0, edges:[], idx:pts.length});
+
+  function regionOf(x,y,z){
+    if(z>0.32) return 'frontal';
+    if(z<-0.36 && y>-0.34) return 'occipital';
+    if(Math.abs(x)>0.46 && y<0.30 && z>-0.34) return 'temporal';
+    return 'parietal';
+  }
+  // 皮层（双半球，带沟回起伏）
+  for(let i=0;i<980;i++){
+    const u=R()*TAU, v=Math.acos(2*R()-1);
+    const dx=Math.sin(v)*Math.cos(u), dy=Math.cos(v), dz=Math.sin(v)*Math.sin(u);
+    const hemi = dx<0?-1:1;
+    let x = hemi*(0.30+0.70*Math.pow(Math.abs(dx),0.85));
+    const bottom = clamp((-dy-0.15)/0.85,0,1);
+    x *= 1-0.6*bottom;
+    const wr = Math.sin(9*Math.atan2(x,dz)) + Math.sin(21*dy+5*u);
+    const rr = (1+0.035*wr)*(0.92+0.14*Math.sin(3*u+2*dy));
+    add(x*0.88*rr, dy*0.72*rr, dz*1.08*rr, regionOf(x,dy,dz));
+  }
+  // 小脑（水平分层）
+  for(let i=0;i<200;i++){
+    const u=R()*TAU, v=Math.acos(2*R()-1);
+    const ex=Math.sin(v)*Math.cos(u), ey=Math.cos(v), ez=Math.sin(v)*Math.sin(u);
+    const rr=1+0.07*Math.sin(18*ey);
+    add(ex*0.52*rr, -0.52+ey*0.28*rr, -0.72+ez*0.40*rr, 'cerebellum');
+  }
+  // 海马体（两侧海马弧）
+  for(let i=0;i<110;i++){
+    const s=R()<0.5?-1:1, t=R();
+    add(s*0.30+(R()-.5)*.15, -0.10+0.17*Math.sin(t*4.6)+(R()-.5)*.11, 0.32-0.70*t+(R()-.5)*.10, 'hippocampus');
+  }
+  // 脑干
+  for(let i=0;i<70;i++){
+    const t=R();
+    add((R()-.5)*.20*(1-t*.4), -0.44-t*0.62, -0.34+t*0.20, 'brainstem');
+  }
+  // 建立突触：空间哈希 + 近邻连接
+  const CELL=0.19, grid=new Map();
+  for(let i=0;i<pts.length;i++){
+    const k=((pts[i].p[0]/CELL)|0)+'_'+((pts[i].p[1]/CELL)|0)+'_'+((pts[i].p[2]/CELL)|0);
+    (grid.get(k)||grid.set(k,[]).get(k)).push(i);
+  }
+  const R2=CELL*CELL;
+  for(let i=0;i<pts.length;i++){
+    const p=pts[i].p, cx=(p[0]/CELL)|0, cy=(p[1]/CELL)|0, cz=(p[2]/CELL)|0;
+    const cand=[];
+    for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)for(let c=-1;c<=1;c++){
+      const cell=grid.get((cx+a)+'_'+(cy+b)+'_'+(cz+c)); if(!cell)continue;
+      for(const j of cell){ if(j===i)continue;
+        const q=pts[j].p, ddx=p[0]-q[0],ddy=p[1]-q[1],ddz=p[2]-q[2], d2=ddx*ddx+ddy*ddy+ddz*ddz;
+        if(d2<R2) cand.push([d2,j]);
+      }
+    }
+    cand.sort((a,b)=>a[0]-b[0]);
+    for(let n=0;n<Math.min(3,cand.length);n++){
+      const j=cand[n][1];
+      if(!pts[i].edges.includes(j)){ pts[i].edges.push(j); pts[j].edges.push(i); }
+    }
+  }
+  return pts;
+}
+
+/* ================= 脑渲染器 ================= */
+function BrainCanvas(canvas, opts){
+  this.cv=canvas; this.ctx=canvas.getContext('2d');
+  this.pts=buildBrain();
+  this.rot={y:opts.rotY||0, x:opts.rotX||0.16};
+  this.auto=opts.autoRotate!==false;
+  this.autoSpeed=opts.autoSpeed||0.14;
+  this.scaleK=opts.scale||0.34;
+  this.highlight=null;
+  this.visible=true;
+  this.mouse={x:-9999,y:-9999,in:false};
+  this.dragging=false; this.lastMX=0; this.lastMY=0;
+  this.pulses=[]; this.rings=[]; this.queue=[];
+  this.edgeBoost=0; this.globalGlow=0;
+  this.proj=new Float32Array(this.pts.length*3);
+  this.dpr=Math.min(devicePixelRatio||1,2);
+
+  const cv=this.cv;
+  this.resize();
+  addEventListener('resize',()=>this.resize());
+
+  cv.addEventListener('pointerdown',e=>{
+    this.dragging=true; this.lastMX=e.clientX; this.lastMY=e.clientY;
+    cv.setPointerCapture(e.pointerId);
+    if(opts.clickable){
+      const r=cv.getBoundingClientRect();
+      this.burst(e.clientX-r.left, e.clientY-r.top);
+    }
+  });
+  cv.addEventListener('pointermove',e=>{
+    const r=cv.getBoundingClientRect();
+    this.mouse.x=e.clientX-r.left; this.mouse.y=e.clientY-r.top; this.mouse.in=true;
+    if(this.dragging){
+      this.rot.y += (e.clientX-this.lastMX)*0.006;
+      this.rot.x = clamp(this.rot.x+(e.clientY-this.lastMY)*0.005,-0.9,0.9);
+      this.lastMX=e.clientX; this.lastMY=e.clientY;
+    }
+  });
+  cv.addEventListener('pointerup',()=>{this.dragging=false;});
+  cv.addEventListener('pointerleave',()=>{this.dragging=false;this.mouse.in=false;this.mouse.x=-9999;});
+}
+BrainCanvas.prototype.resize=function(){
+  const w=this.cv.clientWidth, h=this.cv.clientHeight;
+  this.w=w; this.h=h;
+  this.cv.width=Math.max(2,w*this.dpr); this.cv.height=Math.max(2,h*this.dpr);
+  this.ctx.setTransform(this.dpr,0,0,this.dpr,0,0);
+};
+BrainCanvas.prototype.burst=function(x,y){
+  this.rings.push({x:x,y:y,r:6,a:1});
+  const R=Math.random;
+  let n=0;
+  for(let i=0;i<this.pts.length && n<46;i++){
+    if(R()<0.05){
+      const p=this.proj, o=(i*3);
+      const dx=p[o]-x, dy=p[o+1]-y;
+      if(dx*dx+dy*dy<7600){ this.pts[i].e=2.4; n++; }
+    }
+  }
+};
+BrainCanvas.prototype.project=function(){
+  const cy=Math.cos(this.rot.y), sy=Math.sin(this.rot.y);
+  const cx=Math.cos(this.rot.x), sx=Math.sin(this.rot.x);
+  const s=Math.min(this.w,this.h)*this.scaleK, CX=this.w/2, CY=this.h/2;
+  const pr=this.proj;
+  for(let i=0;i<this.pts.length;i++){
+    const p=this.pts[i].p;
+    const x1=p[0]*cy+p[2]*sy, z1=-p[0]*sy+p[2]*cy;
+    const y1=p[1]*cx-z1*sx,  z2=p[1]*sx+z1*cx;
+    const k=3.3/(3.3+z2);
+    pr[i*3]=CX+x1*s*k; pr[i*3+1]=CY+y1*s*k; pr[i*3+2]=k;
+  }
+};
+BrainCanvas.prototype.update=function(dt,time){
+  const R=Math.random;
+  this.t=time;
+  while(this.queue.length && this.queue[0].at<=time){ this.queue.shift().fn(); }
+  this.queue.sort((a,b)=>a.at-b.at);
+  // 自发放电（受全局活跃度驱动）
+  let fireN = dt*5.5*SIM.act;
+  while(fireN>0){ if(fireN>1 || R()<fireN) this.fire(this.pts[(R()*this.pts.length)|0]); fireN--; }
+  // 光标电刺激（屏幕空间）
+  if(this.mouse.in && !this.dragging){
+    const r2=8100, m=this.mouse;
+    for(let i=0;i<this.pts.length;i++){
+      const o=i*3, dx=this.proj[o]-m.x, dy=this.proj[o+1]-m.y;
+      if(dx*dx+dy*dy<r2) this.pts[i].e=Math.min(2.2,this.pts[i].e+dt*7);
+    }
+  }
+  // 生物扫描线：扫过之处的神经元被轻度去极化
+  const scanX=((time*80)%(this.w+240))-120;
+  this.scanX=scanX;
+  for(let i=0;i<this.pts.length;i++){
+    if(Math.abs(this.proj[i*3]-scanX)<16) this.pts[i].e=Math.min(2.2,this.pts[i].e+dt*1.8);
+  }
+  // 图谱高亮：目标区持续激活，其余压暗
+  if(this.highlight){
+    for(const pt of this.pts) if(pt.r===this.highlight && R()<dt*2.2) this.fire(pt);
+  }
+  // 衰减与点火
+  const decay=Math.exp(-dt*1.9);
+  for(const pt of this.pts){
+    pt.e*=decay;
+    if(pt.cool>0)pt.cool-=dt;
+    if(pt.e>1.0 && pt.cool<=0){
+      pt.e=0.25; pt.cool=0.16;
+      const n=pt.edges;
+      for(let k=0;k<n.length && k<3;k++){
+        if(R()<0.75) this.spawnPulse(pt,n[k]);
+      }
+      // 强放电时偶发膜涟漪
+      if(R()<0.05 && this.rings.length<14){
+        const oo=pt.idx*3;
+        this.rings.push({x:this.proj[oo],y:this.proj[oo+1],r:2,a:.75,col:REGIONS[pt.r].rgb.join(',')});
+      }
+      SIM.spikeBump(dt);
+    }
+  }
+  // 脉冲传播
+  for(let i=this.pulses.length-1;i>=0;i--){
+    const pu=this.pulses[i];
+    pu.t+=dt*pu.sp;
+    if(pu.t>=1){
+      const tg=this.pts[pu.b];
+      tg.e=Math.min(2.0,tg.e+0.6);
+      this.pulses.splice(i,1);
+    }
+  }
+  if(this.pulses.length>650) this.pulses.splice(0,this.pulses.length-650);
+  this.edgeBoost=Math.max(0,this.edgeBoost-dt*0.25);
+  this.globalGlow=Math.max(0,this.globalGlow-dt*0.5);
+  for(let i=this.rings.length-1;i>=0;i--){
+    const g=this.rings[i]; g.r+=dt*260; g.a-=dt*1.6;
+    if(g.a<=0)this.rings.splice(i,1);
+  }
+  if(this.auto && !this.dragging) this.rot.y+=dt*this.autoSpeed;
+};
+BrainCanvas.prototype.fire=function(pt){
+  pt.e=Math.max(pt.e,0.6); pt.cool=0.14;
+  const n=pt.edges;
+  for(let k=0;k<n.length;k++){ if(Math.random()<0.7) this.spawnPulse(pt,n[k]); }
+};
+BrainCanvas.prototype.spawnPulse=function(a,bIdx){
+  if(this.pulses.length>680)return;
+  this.pulses.push({ai:a.idx, b:bIdx, t:0, sp:2.2+Math.random()*2.4});
+};
+BrainCanvas.prototype.fx=function(kind,time){
+  const t0=time;
+  if(kind==='burst'){
+    for(let i=0;i<12;i++){
+      this.queue.push({at:t0+i*0.05, fn:()=>{
+        for(let k=0;k<30;k++){ const pt=this.pts[(Math.random()*this.pts.length)|0]; if(pt.r!=='brainstem')pt.e=2.3; }
+      }});
+    }
+  }else if(kind==='da'){
+    this.globalGlow=3.2;
+    for(let i=0;i<160;i++){ const pt=this.pts[(Math.random()*this.pts.length)|0]; pt.e=Math.max(pt.e,1.4); }
+  }else if(kind==='memory'){
+    const hc=this.pts.filter(p=>p.r==='hippocampus').sort((a,b)=>a.p[2]-b.p[2]);
+    const step=Math.ceil(hc.length/16);
+    for(let i=0;i<16;i++){
+      this.queue.push({at:t0+i*0.14, fn:()=>{
+        for(let k=i*step;k<Math.min(hc.length,(i+1)*step);k++) hc[k].e=2.4;
+      }});
+    }
+  }else if(kind==='ltp'){
+    this.edgeBoost=1;
+    for(let i=0;i<90;i++){ const pt=this.pts[(Math.random()*this.pts.length)|0]; pt.e=Math.max(pt.e,1.2); }
+  }
+};
+BrainCanvas.prototype.draw=function(){
+  const ctx=this.ctx, pr=this.proj, pts=this.pts;
+  ctx.fillStyle='rgba(4,9,12,0.5)';
+  ctx.fillRect(0,0,this.w,this.h);
+  // 扫描光带（显微镜扫掠）
+  if(this.scanX!==undefined && this.scanX>-120 && this.scanX<this.w+120){
+    const g=ctx.createLinearGradient(this.scanX-70,0,this.scanX+70,0);
+    g.addColorStop(0,'rgba(94,230,255,0)');
+    g.addColorStop(.5,'rgba(94,230,255,.055)');
+    g.addColorStop(1,'rgba(94,230,255,0)');
+    ctx.fillStyle=g; ctx.fillRect(this.scanX-70,0,140,this.h);
+    ctx.fillStyle='rgba(94,230,255,.18)';
+    ctx.fillRect(this.scanX,0,1,this.h);
+  }
+
+  // 突触
+  const dimF = this.highlight?0.16:1;
+  const eb=this.edgeBoost;
+  ctx.lineWidth=1;
+  for(let i=0;i<pts.length;i++){
+    const a=pts[i], oa=i*3;
+    const ea=clamp(0.05+(a.e*0.22)+eb*0.12,0,0.55);
+    if(ea<0.06 && !eb)continue;
+    const hiA = this.highlight ? (a.r===this.highlight?1.6:0.25) : 1;
+    for(const j of a.edges){
+      if(j<i)continue;
+      const b=pts[j], ob=j*3;
+      const e2=clamp(ea+b.e*0.22+eb*0.12,0.02,0.6);
+      const hiB = this.highlight ? (b.r===this.highlight?1.6:0.25) : 1;
+      ctx.strokeStyle='rgba(120,255,200,'+(e2*dimF*hiA).toFixed(3)+')';
+      ctx.beginPath();
+      ctx.moveTo(pr[oa],pr[oa+1]);
+      ctx.lineTo(pr[ob],pr[ob+1]);
+      ctx.stroke();
+    }
+  }
+  // 神经元（加色发光）
+  ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<pts.length;i++){
+    const pt=pts[i], o=i*3, k=pr[o+2];
+    const c=REGIONS[pt.r].rgb;
+    const e=pt.e + (this.highlight===pt.r?0.35:0) + this.globalGlow*0.3;
+    const br=clamp(0.30+e*0.7,0,1);
+    const dim = this.highlight&&pt.r!==this.highlight ? 0.22 : 1;
+    const r=(1.15+e*1.5)*k;
+    ctx.fillStyle='rgba('+c[0]+','+c[1]+','+c[2]+','+(br*dim).toFixed(3)+')';
+    ctx.beginPath();ctx.arc(pr[o],pr[o+1],r,0,TAU);ctx.fill();
+    if(e>0.75){
+      ctx.fillStyle='rgba('+c[0]+','+c[1]+','+c[2]+','+((e-0.75)*0.24*dim).toFixed(3)+')';
+      ctx.beginPath();ctx.arc(pr[o],pr[o+1],r*3.2,0,TAU);ctx.fill();
+    }
+    // 放电时伸出树突棘
+    if(e>0.9){
+      const sp=(2.5+e*3.4)*k;
+      ctx.strokeStyle='rgba('+c[0]+','+c[1]+','+c[2]+','+((e-0.9)*0.5*dim).toFixed(3)+')';
+      ctx.lineWidth=0.8;
+      const seed=i*2.399;
+      ctx.beginPath();
+      for(let s=0;s<4;s++){
+        const an=seed+s*TAU/4;
+        ctx.moveTo(pr[o],pr[o+1]);
+        ctx.lineTo(pr[o]+Math.cos(an)*sp,pr[o+1]+Math.sin(an)*sp);
+      }
+      ctx.stroke();
+    }
+  }
+  // 脉冲
+  for(const pu of this.pulses){
+    const oa=pu.ai*3, ob=pu.b*3;
+    const x=pr[oa]+(pr[ob]-pr[oa])*pu.t, y=pr[oa+1]+(pr[ob+1]-pr[oa+1])*pu.t;
+    const c=REGIONS[pts[pu.b].r].rgb;
+    ctx.fillStyle='rgba(255,255,255,0.85)';
+    ctx.beginPath();ctx.arc(x,y,1.4,0,TAU);ctx.fill();
+    ctx.fillStyle='rgba('+c[0]+','+c[1]+','+c[2]+',0.3)';
+    ctx.beginPath();ctx.arc(x,y,3.6,0,TAU);ctx.fill();
+  }
+  ctx.globalCompositeOperation='source-over';
+  // 冲击波 / 膜涟漪
+  for(const g of this.rings){
+    ctx.strokeStyle='rgba('+(g.col||'255,194,71')+','+(g.a*0.7).toFixed(3)+')';
+    ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.arc(g.x,g.y,g.r,0,TAU);ctx.stroke();
+    ctx.strokeStyle='rgba('+(g.col||'61,255,176')+','+(g.a*0.4).toFixed(3)+')';
+    ctx.beginPath();ctx.arc(g.x,g.y,g.r*0.6,0,TAU);ctx.stroke();
+  }
+};
+for(const k in REGIONS) REGIONS[k].rgb=hexRGB(REGIONS[k].color);
+
+/* ================= 全局模拟状态 ================= */
+const SIM={
+  spike:46, volt:-64.9, syn:12840, dopa:28.6, act:1, eegEnv:0.3,
+  _bump:0,
+  spikeBump(){this._bump=Math.min(60,this._bump+1.1);},
+  stim(kind){
+    const t=performance.now()/1000;
+    if(kind==='burst'){ this.act=Math.max(this.act,2.7); this.eegEnv=1; brain.fx('burst',t); flash(); }
+    else if(kind==='da'){ this.act=Math.max(this.act,1.9); this.dopa+=24; this.eegEnv=0.7; brain.fx('da',t); }
+    else if(kind==='memory'){ this.act=Math.max(this.act,1.4); this.eegEnv=0.6; brain.fx('memory',t); }
+    else if(kind==='ltp'){ this.syn+=320; this.eegEnv=0.5; brain.fx('ltp',t); }
+    if(GBUMP[kind]) geneBump(GBUMP[kind]);
+    brain2 && brain2.stimEcho(kind,t);
+  }
+};
+function flash(){
+  const f=document.getElementById('flash');
+  f.classList.add('on'); setTimeout(()=>f.classList.remove('on'),160);
+}
+
+/* ================= 初始化画布 ================= */
+const brain = new BrainCanvas(document.getElementById('brain'),{scale:0.335,autoSpeed:reduceMotion?0.04:0.13,clickable:true});
+const brain2 = new BrainCanvas(document.getElementById('brain2'),{scale:0.30,autoSpeed:reduceMotion?0.03:0.10,rotX:0.12});
+brain2.stimEcho=function(kind,t){ this.fx(kind==='burst'?'burst':kind,t); };
+
+/* ================= 分子层：DNA 双螺旋 ================= */
+const byId=id=>document.getElementById(id);
+const hx=byId('helix'), hctx=hx.getContext('2d');
+let helixVis=false, hxT=0;
+const hdpr=Math.min(devicePixelRatio||1,2);
+function hxFit(){ hx.width=Math.max(2,hx.clientWidth*hdpr); hx.height=250*hdpr; hctx.setTransform(hdpr,0,0,hdpr,0,0); }
+hxFit(); addEventListener('resize',hxFit);
+const BASE=[['A','#3dffb0'],['T','#5ee6ff'],['G','#ffc247'],['C','#ff7eb6']];
+function helixDraw(dt){
+  hxT+=dt;
+  const w=hx.clientWidth, H=250, mid=H/2, A=H*.34, ph=hxT*.9;
+  hctx.clearRect(0,0,w,H);
+  // 纵向标尺网格
+  hctx.strokeStyle='rgba(61,255,176,.06)'; hctx.lineWidth=1;
+  for(let x=0;x<w;x+=32){ hctx.beginPath(); hctx.moveTo(x,0); hctx.lineTo(x,H); hctx.stroke(); }
+  // 碱基对（rungs）
+  for(let x=8;x<w;x+=26){
+    const t=x*.021+ph;
+    const y1=mid+Math.sin(t)*A, y2=mid+Math.sin(t+Math.PI)*A;
+    const depth=.5+.5*Math.cos(t);
+    const bc=BASE[((x/26)|0)%4][1];
+    hctx.strokeStyle=bc; hctx.globalAlpha=.10+.30*depth; hctx.lineWidth=1.6;
+    hctx.beginPath(); hctx.moveTo(x,y1); hctx.lineTo(x,y2); hctx.stroke();
+    hctx.fillStyle=bc; hctx.globalAlpha=.30+.45*depth;
+    hctx.beginPath(); hctx.arc(x,y1,2,0,TAU); hctx.fill();
+    hctx.beginPath(); hctx.arc(x,y2,2,0,TAU); hctx.fill();
+    hctx.globalAlpha=1;
+  }
+  // 双骨架
+  for(let s=0;s<2;s++){
+    hctx.beginPath();
+    for(let x=0;x<=w;x+=4){
+      const y=mid+Math.sin(x*.021+ph+s*Math.PI)*A;
+      x?hctx.lineTo(x,y):hctx.moveTo(x,y);
+    }
+    hctx.strokeStyle=s?'rgba(94,230,255,.75)':'rgba(61,255,176,.75)';
+    hctx.lineWidth=1.6;
+    hctx.shadowColor=s?'#5ee6ff':'#3dffb0'; hctx.shadowBlur=6;
+    hctx.stroke(); hctx.shadowBlur=0;
+  }
+  // 转录脉冲：一个亮点沿主链从左向右巡游
+  const q=(hxT%6)/6, px=q*w, py=mid+Math.sin(px*.021+ph)*A;
+  const gr=hctx.createRadialGradient(px,py,0,px,py,26);
+  gr.addColorStop(0,'rgba(255,255,255,.9)');
+  gr.addColorStop(.3,'rgba(255,194,71,.45)');
+  gr.addColorStop(1,'rgba(255,194,71,0)');
+  hctx.fillStyle=gr;
+  hctx.beginPath(); hctx.arc(px,py,26,0,TAU); hctx.fill();
+}
+
+/* ================= 基因表达探针 ================= */
+const GENES=[
+  {id:'BDNF',   cn:'神经营养因子 · 突触生长', v:22},
+  {id:'DRD1',   cn:'多巴胺受体 D1 · 奖赏通路', v:34},
+  {id:'GAD1',   cn:'GABA 合成酶 · 抑制平衡',  v:48},
+  {id:'SLC17A7',cn:'谷氨酸转运体 · 兴奋传导', v:41},
+  {id:'CREB1',  cn:'转录因子 CREB · 记忆固化', v:18}
+];
+const geneList=byId('gene-list'), geneEls={};
+for(const g of GENES){
+  g.base=g.v;
+  const el=document.createElement('div');
+  el.className='gene';
+  el.innerHTML='<div><span class="gid">'+g.id+'</span><span class="gcn">'+g.cn+'</span></div>'+
+    '<div class="gtrack"><i class="gfill" style="width:'+g.v+'%"></i></div>'+
+    '<div class="gval">'+g.v+'%</div>';
+  geneList.appendChild(el);
+  geneEls[g.id]={fill:el.querySelector('.gfill'), val:el.querySelector('.gval')};
+}
+function geneBump(pairs){
+  for(const pr of pairs){
+    const g=GENES.find(x=>x.id===pr[0]);
+    if(g) g.v=Math.min(96,g.v+pr[1]);
+  }
+  log('学习','基因表达响应 → '+pairs.map(p=>p[0]).join(' / ')+' 上调');
+}
+const GBUMP={
+  burst:[['BDNF',26],['CREB1',16]],
+  da:   [['DRD1',34],['CREB1',12]],
+  memory:[['CREB1',30],['BDNF',10]],
+  ltp:  [['BDNF',28],['SLC17A7',14]]
+};
+let geneTimer=0;
+function geneStep(dt){
+  geneTimer+=dt;
+  if(geneTimer<.2) return;
+  geneTimer=0;
+  for(const g of GENES){
+    g.v+=(g.base-g.v)*0.06;
+    const e=geneEls[g.id];
+    e.fill.style.width=g.v.toFixed(1)+'%';
+    e.val.textContent=Math.round(g.v)+'%';
+  }
+}
+
+/* ================= 主视觉漂浮分子颗粒 ================= */
+const mol=byId('mol'), mctx=mol.getContext('2d');
+let molVis=true, mols=[];
+const mdpr=Math.min(devicePixelRatio||1,2);
+function molFit(){
+  mol.width=Math.max(2,mol.clientWidth*mdpr);
+  mol.height=Math.max(2,mol.clientHeight*mdpr);
+  mctx.setTransform(mdpr,0,0,mdpr,0,0);
+}
+molFit(); addEventListener('resize',molFit);
+(function seedMol(){
+  const W=mol.clientWidth, H=mol.clientHeight;
+  for(let i=0;i<16;i++){
+    mols.push({x:Math.random()*W, y:Math.random()*H, vy:-(4+Math.random()*9),
+      vr:(Math.random()-.5)*.5, r:Math.random()*TAU, s:7+Math.random()*13,
+      a:.05+Math.random()*.10, t:i%3});
+  }
+})();
+function molDraw(dt){
+  const w=mol.clientWidth, h=mol.clientHeight;
+  mctx.clearRect(0,0,w,h);
+  for(const m of mols){
+    m.y+=m.vy*dt; m.r+=m.vr*dt;
+    if(m.y<-40){ m.y=h+30; m.x=Math.random()*w; }
+    mctx.save(); mctx.translate(m.x,m.y); mctx.rotate(m.r);
+    mctx.strokeStyle='rgba(94,230,255,'+m.a.toFixed(3)+')';
+    mctx.lineWidth=1;
+    if(m.t===0){ // 苯环
+      mctx.beginPath();
+      for(let k=0;k<=6;k++){
+        const an=k*TAU/6, px=Math.cos(an)*m.s, py=Math.sin(an)*m.s;
+        k?mctx.lineTo(px,py):mctx.moveTo(px,py);
+      }
+      mctx.stroke();
+      mctx.beginPath(); mctx.arc(0,0,m.s*.45,0,TAU); mctx.stroke();
+    }else if(m.t===1){ // 双链小段
+      mctx.beginPath();
+      mctx.moveTo(-m.s,-m.s); mctx.quadraticCurveTo(m.s,0,-m.s,m.s);
+      mctx.moveTo(m.s,-m.s);  mctx.quadraticCurveTo(-m.s,0,m.s,m.s);
+      mctx.stroke();
+      mctx.strokeStyle='rgba(61,255,176,'+(m.a*.8).toFixed(3)+')';
+      mctx.beginPath();
+      mctx.moveTo(-m.s*.4,-m.s*.5); mctx.lineTo(m.s*.4,m.s*.5);
+      mctx.moveTo(m.s*.4,-m.s*.5);  mctx.lineTo(-m.s*.4,m.s*.5);
+      mctx.stroke();
+    }else{ // 六边形晶格片段
+      mctx.beginPath();
+      for(let k=0;k<=6;k++){
+        const an=k*TAU/6+Math.PI/6, px=Math.cos(an)*m.s, py=Math.sin(an)*m.s;
+        k?mctx.lineTo(px,py):mctx.moveTo(px,py);
+      }
+      mctx.closePath(); mctx.stroke();
+      mctx.fillStyle='rgba(61,255,176,'+(m.a*.5).toFixed(3)+')';
+      mctx.fill();
+    }
+    mctx.restore();
+  }
+}
+// 可见性观察：分子层离开视口即暂停绘制
+new IntersectionObserver(es=>{es.forEach(en=>{molVis=en.isIntersecting;});},{threshold:.02}).observe(byId('top'));
+new IntersectionObserver(es=>{es.forEach(en=>{helixVis=en.isIntersecting;});},{threshold:.05}).observe(byId('molecular'));
+
+// 离屏暂停
+new IntersectionObserver(es=>{es.forEach(en=>{
+  if(en.target===brain.cv)brain.visible=en.isIntersecting;
+  if(en.target===brain2.cv)brain2.visible=en.isIntersecting;
+});},{threshold:0.02}).observe(brain.cv);
+new IntersectionObserver(es=>{es.forEach(en=>{brain2.visible=en.isIntersecting;});},{threshold:0.02}).observe(brain2.cv);
+
+/* ================= 遥测面板 ================= */
+const $=id=>document.getElementById(id);
+const sparkCtx={}, METRICS=[
+  {id:'spike',fmt:v=>v.toFixed(1)},
+  {id:'volt', fmt:v=>v.toFixed(1)},
+  {id:'syn',  fmt:v=>Math.round(v).toLocaleString('en-US')},
+  {id:'dopa', fmt:v=>v.toFixed(1)}
+];
+for(const m of METRICS){
+  const c=$('spark-'+m.id); c.__hist=[];
+  const dpr=Math.min(devicePixelRatio||1,2);
+  function fit(){ c.width=c.clientWidth*dpr; c.height=34*dpr; c.getContext('2d').setTransform(dpr,0,0,dpr,0,0); }
+  fit(); addEventListener('resize',fit);
+  sparkCtx[m.id]=c;
+}
+function drawSpark(c,color){
+  const h=c.__hist; if(h.length<2)return;
+  const ctx=c.getContext('2d'), w=c.clientWidth, H=34;
+  ctx.clearRect(0,0,w,H);
+  let mn=Infinity,mx=-Infinity; for(const v of h){if(v<mn)mn=v;if(v>mx)mx=v;}
+  const rg=(mx-mn)||1;
+  ctx.beginPath();
+  for(let i=0;i<h.length;i++){
+    const x=i/(h.length-1)*w, y=H-4-((h[i]-mn)/rg)*(H-8);
+    i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+  }
+  ctx.strokeStyle=color; ctx.lineWidth=1.4; ctx.stroke();
+  const lx=w,ly=H-4-((h[h.length-1]-mn)/rg)*(H-8);
+  ctx.fillStyle=color;ctx.beginPath();ctx.arc(lx-1,ly,2,0,TAU);ctx.fill();
+}
+setInterval(()=>{
+  for(const m of METRICS){
+    const c=sparkCtx[m.id];
+    c.__hist.push(SIM[m.id]); if(c.__hist.length>64)c.__hist.shift();
+  }
+  drawSpark(sparkCtx.spike,'#3dffb0');
+  drawSpark(sparkCtx.volt,'#5ee6ff');
+  drawSpark(sparkCtx.syn,'#a78bff');
+  drawSpark(sparkCtx.dopa,'#ffc247');
+},280);
+
+/* ================= 脑电波形 ================= */
+const eeg=$('eeg'); const ectx=eeg.getContext('2d');
+const CH=[{n:'δ DELTA',c:'#3dffb0',f:1.7,a:.9},{n:'θ THETA',c:'#5ee6ff',f:3.1,a:.7},{n:'α ALPHA',c:'#ffc247',f:5.3,a:.55},{n:'γ GAMMA',c:'#ff7eb6',f:9.2,a:.4}];
+const edpr=Math.min(devicePixelRatio||1,2);
+function eegFit(){ eeg.width=eeg.clientWidth*edpr; eeg.height=170*edpr; ectx.setTransform(edpr,0,0,edpr,0,0); }
+eegFit(); addEventListener('resize',eegFit);
+const eegPh=CH.map(()=>Math.random()*10);
+const eegBuf=CH.map(()=>[]);
+function eegStep(dt){
+  const w=eeg.clientWidth;
+  for(let ci=0;ci<CH.length;ci++){
+    eegPh[ci]+=dt*CH[ci].f;
+    const env=0.35+(SIM.act-1)*0.55+SIM.eegEnv*0.9;
+    const v=Math.sin(eegPh[ci]*TAU*0.7)*CH[ci].a + Math.sin(eegPh[ci]*TAU*1.9+1.3)*CH[ci].a*0.4 + (Math.random()-.5)*0.35;
+    const buf=eegBuf[ci];
+    buf.push(v*env*14);
+    const maxN=Math.ceil(w/2);
+    if(buf.length>maxN)buf.splice(0,buf.length-maxN);
+  }
+  SIM.eegEnv=Math.max(0,SIM.eegEnv-dt*0.5);
+}
+function eegDraw(){
+  const w=eeg.clientWidth,H=170,rowH=H/4;
+  ectx.clearRect(0,0,w,H);
+  ectx.strokeStyle='rgba(61,255,176,0.07)';ectx.lineWidth=1;
+  for(let i=1;i<4;i++){ectx.beginPath();ectx.moveTo(0,i*rowH);ectx.lineTo(w,i*rowH);ectx.stroke();}
+  for(let ci=0;ci<CH.length;ci++){
+    const mid=ci*rowH+rowH/2, buf=eegBuf[ci];
+    ectx.beginPath();
+    const x0=w-buf.length*2;
+    for(let i=0;i<buf.length;i++){
+      const x=x0+i*2, y=mid-buf[i];
+      i?ecty2(ectx,x,y):ectx.moveTo(x,y);
+    }
+    ectx.strokeStyle=CH[ci].c; ectx.lineWidth=1.3;
+    ectx.shadowColor=CH[ci].c; ectx.shadowBlur=5;
+    ectx.stroke(); ectx.shadowBlur=0;
+    ectx.fillStyle='rgba(217,255,233,0.5)';
+    ectx.font='9px monospace';
+    ectx.fillText(CH[ci].n, 8, ci*rowH+14);
+  }
+}
+function ecty2(ctx,x,y){ctx.lineTo(x,y);}
+
+/* ================= 事件流 ================= */
+const stream=$('stream');
+function nowStr(){
+  const d=new Date();
+  const p=(n,l=2)=>String(n).padStart(l,'0');
+  return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+'.'+p(d.getMilliseconds(),3);
+}
+const TAGCLS={'感知':'sense','运动':'motor','学习':'learn','系统':'sys','刺激':'stim'};
+function log(tag,msg){
+  const el=document.createElement('div');
+  el.className='log-line';
+  el.innerHTML='<span class="lt">'+nowStr()+'</span><span class="tag tag-'+TAGCLS[tag]+'">'+tag+'</span><span class="lm">'+msg+'</span>';
+  stream.prepend(el);
+  while(stream.children.length>36)stream.lastChild.remove();
+}
+const AMBIENT=[
+  ['感知','视觉皮层 OL 检测到高对比边缘 → 局部动作电位爆发'],
+  ['感知','触觉传入： antennal 输入通道尖峰频率 +18%'],
+  ['运动','运动输出群 MBON-α′2 发放 → 转向指令 +12.4°'],
+  ['运动','步态节律器相位推进 · 占空比 0.42'],
+  ['学习','蘑菇体 KCα1 突触权重上调 w+=0.031（奖励预测误差>0）'],
+  ['学习','STDP 窗口配对 214 次 · LTP:LTD = 2.7'],
+  ['系统','谷氨酸回收完成 · 突触间隙浓度恢复基线'],
+  ['系统','钠钾泵 ATP 消耗模拟 0.83 mol/s'],
+  ['系统','抑制性中间神经元群行使 veto · 输出动作被取消'],
+  ['感知','嗅觉投射神经元 PN 模式切换 → 新气味表征锁定'],
+  ['运动','前运动区增益补偿：噪声底 +0.4%'],
+  ['系统','慢波睡眠窗口模拟：皮层放电同步率 0.61'],
+  ['系统','星形胶质细胞钙波扩散 · 突触间隙谷氨酸清除中'],
+  ['感知','钙成像通道 Ca²⁺ 瞬变检测 · ΔF/F₀ +0.42'],
+  ['系统','线粒体 ATP 产率上调 · 局部氧耗 +6%'],
+  ['学习','即刻早期基因 c-FOS 转录激活 · mRNA 丰度 +19%']
+];
+let lastAmbient=0;
+function ambientTick(time){
+  if(time-lastAmbient>2.2+Math.random()*2.6){
+    lastAmbient=time;
+    const a=AMBIENT[(Math.random()*AMBIENT.length)|0];
+    log(a[0],a[1]);
+  }
+}
+
+/* ================= 刺激按钮 ================= */
+document.querySelectorAll('.stim').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const kind=btn.dataset.stim;
+    SIM.stim(kind);
+    btn.classList.remove('fired'); void btn.offsetWidth; btn.classList.add('fired');
+    const NAMES={burst:'电刺激',da:'多巴胺灌注',memory:'记忆写入',ltp:'突触强化'};
+    const DETAIL={burst:'80μA 脉冲串注入皮层 → 级联放电进行中',
+      da:'全局递质浓度 +24nM · 兴奋阈值下调 · 自发放电升高',
+      memory:'海马体印记回路顺序激活 · 情节轨迹写入中',
+      ltp:'长时程增强触发 · 连接权重全局上调'};
+    log('刺激','['+NAMES[kind]+'] '+DETAIL[kind]);
+  });
+});
+
+/* ================= 脑区图谱 ================= */
+const regionList=$('region-list');
+const TOTAL=148203;
+let activeRegion=null;
+for(const id in REGIONS){
+  const r=REGIONS[id];
+  const el=document.createElement('div');
+  el.className='region'; el.dataset.id=id;
+  el.innerHTML='<span class="rc" style="background:'+r.color+';box-shadow:0 0 8px '+r.color+'"></span>'+
+    '<div class="rn">'+r.cn+'</div><div class="re">'+r.en+' · '+r.count.toLocaleString('en-US')+'</div>';
+  el.addEventListener('click',()=>selectRegion(id));
+  regionList.appendChild(el);
+}
+function selectRegion(id){
+  activeRegion=id;
+  brain2.highlight = (brain2.highlight===id)?null:id;
+  document.querySelectorAll('.region').forEach(el=>el.classList.toggle('on',el.dataset.id===brain2.highlight));
+  const r=REGIONS[id];
+  $('ri-cn').textContent=r.cn;
+  $('ri-cn').style.color=r.color;
+  $('ri-en').textContent=r.en;
+  $('ri-desc').textContent=r.desc;
+  $('ri-count').textContent=r.count.toLocaleString('en-US');
+  $('ri-pct').textContent=(r.count/TOTAL*100).toFixed(1)+'%';
+  const bar=$('ri-bar');
+  bar.style.background=r.color; bar.style.boxShadow='0 0 10px '+r.color;
+  bar.style.animation='none'; void bar.offsetWidth; bar.style.animation='';
+  log('系统','脑区图层切换 → '+r.cn+'（'+r.en+'）');
+}
+selectRegion('frontal');
+brain2.highlight=null;
+document.querySelectorAll('.region').forEach(el=>el.classList.remove('on'));
+
+/* ================= 小波形（工作原理卡片） ================= */
+document.querySelectorAll('.wave').forEach((c,idx)=>{
+  const kind=c.dataset.wave;
+  const col={sense:'#5ee6ff',learn:'#ff7eb6',motor:'#ffc247'}[kind];
+  const dpr=Math.min(devicePixelRatio||1,2);
+  function fit(){c.width=c.clientWidth*dpr;c.height=26*dpr;c.getContext('2d').setTransform(dpr,0,0,dpr,0,0);}
+  fit();addEventListener('resize',fit);
+  c.__t=idx*2;
+  c.__draw=function(dt){
+    c.__t+=dt*(kind==='motor'?4:1.6);
+    const ctx=c.getContext('2d'),w=c.clientWidth,H=26;
+    ctx.clearRect(0,0,w,H);ctx.beginPath();
+    for(let x=0;x<w;x+=2){
+      let y;
+      if(kind==='sense')y=Math.sin(x*0.05+c.__t)*6*Math.abs(Math.sin(x*0.011+c.__t*0.7))+(Math.random()-.5)*2;
+      else if(kind==='learn')y=Math.tanh(Math.sin(x*0.06+c.__t))*8;
+      else y=Math.sin(x*0.16+c.__t*3)>0.2?(Math.random()*8-4):0;
+      x?ctx.lineTo(x,H/2+y):ctx.moveTo(x,H/2+y);
+    }
+    ctx.strokeStyle=col;ctx.lineWidth=1.2;ctx.globalAlpha=0.8;ctx.stroke();ctx.globalAlpha=1;
+  };
+});
+
+/* ================= 时钟 ================= */
+setInterval(()=>{
+  const d=new Date(),p=n=>String(n).padStart(2,'0');
+  $('clock').textContent='UTC+8 '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+},1000);
+
+/* ================= 滚动显现 ================= */
+const io=new IntersectionObserver(es=>{
+  es.forEach(en=>{if(en.isIntersecting){en.target.classList.add('in');io.unobserve(en.target);}});
+},{threshold:0.12});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+/* ================= 主循环 ================= */
+let prev=performance.now();
+let statTimer=0;
+function loop(now){
+  const dt=clamp((now-prev)/1000,0.001,0.05);
+  prev=now;
+  const time=now/1000;
+  // 模拟状态演化
+  SIM.act+=(1-SIM.act)*Math.min(1,dt*0.45);
+  SIM.spike+=(46*SIM.act+SIM._bump+(Math.random()-.5)*6-SIM.spike)*Math.min(1,dt*3);
+  SIM._bump=Math.max(0,SIM._bump-dt*28);
+  SIM.volt+=((-64.9+(SIM.act-1)*3.2+(Math.random()-.5)*1.4)-SIM.volt)*Math.min(1,dt*2.5);
+  SIM.syn+=((12840*Math.min(SIM.act,2)+ (Math.random()-.5)*300)-SIM.syn)*Math.min(1,dt*1.6);
+  SIM.dopa+=((28.6+(SIM.act-1)*13)-SIM.dopa)*Math.min(1,dt*0.7);
+  statTimer+=dt;
+  if(statTimer>0.15){
+    statTimer=0;
+    $('stat-spike').textContent=SIM.spike.toFixed(1);
+    $('stat-volt').textContent=SIM.volt.toFixed(1);
+    $('stat-syn').textContent=Math.round(SIM.syn).toLocaleString('en-US');
+    $('stat-dopa').textContent=SIM.dopa.toFixed(1);
+  }
+  if(brain.visible){brain.project();brain.update(dt,time);brain.draw();}
+  if(brain2.visible){brain2.project();brain2.update(dt,time);brain2.draw();}
+  if(molVis)molDraw(dt);
+  if(helixVis)helixDraw(dt);
+  geneStep(dt);
+  eegStep(dt);eegDraw();
+  document.querySelectorAll('.wave').forEach(c=>c.__draw&&c.__draw(dt));
+  ambientTick(time);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+log('系统','NEUROGENESIS 模拟核心已挂载 · SPEC-042 数字双胞胎苏醒');
+log('系统','连接组载入：148,203 神经元 / ≈9.6M 突触');
+log('系统','分子层挂载：DNA 转录渲染器在线 · 5 支靶基因探针就绪');
+})();
+</script>
+</body>
+</html>
