@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>作品集 · fuge0xsol</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: #24344b;
+      color: #f4e9d5;
+      font-family: 'Inter', 'Helvetica Neue', -apple-system, sans-serif;
+    }
+
+    a { color: inherit; }
+
+    .page {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 3.5rem 1.5rem 4rem;
+    }
+
+    /* Top trademark — same as home */
+    .tm {
+      text-align: center;
+      font-family: monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.3em;
+      color: rgba(244, 233, 213, 0.55);
+      text-transform: uppercase;
+      margin-bottom: 3rem;
+    }
+
+    .back {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      color: rgba(244, 233, 213, 0.55);
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: color 0.25s ease;
+    }
+    .back:hover { color: #f9bd29; }
+
+    .head { margin: 3.2rem 0 0.7rem; }
+    .head h1 {
+      font-family: 'Britti', 'Georgia', serif;
+      font-size: clamp(2.4rem, 7vw, 4rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.4;
+    }
+    .tagline {
+      display: block;
+      font-family: monospace;
+      font-size: clamp(0.65rem, 1.6vw, 0.85rem);
+      color: rgba(244, 233, 213, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      margin-top: 0.4rem;
+    }
+
+    .divider {
+      width: 2.5rem;
+      height: 1px;
+      background: linear-gradient(to right, transparent, #f9bd29, transparent);
+      margin: 1.8rem 0 3rem;
+    }
+
+    /* Work cards */
+    .work {
+      position: relative;
+      border: 1px solid rgba(244, 233, 213, 0.18);
+      border-radius: 0.75rem;
+      background: rgba(36, 52, 75, 0.35);
+      backdrop-filter: blur(12px);
+      padding: 1.8rem 1.8rem 1.5rem;
+      margin-bottom: 1.5rem;
+      transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .work:hover {
+      border-color: rgba(249, 189, 41, 0.55);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+    }
+    .num {
+      position: absolute;
+      top: 1.5rem;
+      right: 1.6rem;
+      font-family: monospace;
+      font-size: 0.72rem;
+      color: rgba(244, 233, 213, 0.35);
+      letter-spacing: 0.15em;
+    }
+    .work h2 {
+      font-family: 'Britti', 'Georgia', serif;
+      font-size: 1.7rem;
+      font-weight: 400;
+      letter-spacing: 0.01em;
+      margin-bottom: 0.2rem;
+    }
+    .work .en {
+      font-family: monospace;
+      font-size: 0.68rem;
+      color: rgba(244, 233, 213, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      margin-bottom: 1rem;
+    }
+    .work p {
+      font-size: 0.9rem;
+      line-height: 2;
+      color: rgba(244, 233, 213, 0.6);
+      margin-bottom: 1.3rem;
+    }
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1.4rem;
+    }
+    .tags span {
+      font-family: monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(244, 233, 213, 0.55);
+      border: 1px solid rgba(244, 233, 213, 0.16);
+      border-radius: 999px;
+      padding: 0.22rem 0.7rem;
+    }
+    .go {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+    }
+    .go a {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-family: monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+      padding: 0.55rem 1.1rem;
+      border-radius: 0.5rem;
+      border: 1px solid rgba(244, 233, 213, 0.18);
+      color: rgba(244, 233, 213, 0.75);
+      transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .go a.primary {
+      border-color: rgba(249, 189, 41, 0.5);
+      color: #f9bd29;
+      background: rgba(249, 189, 41, 0.08);
+    }
+    .go a:hover {
+      border-color: #f9bd29;
+      color: #f9bd29;
+      background: rgba(249, 189, 41, 0.12);
+      transform: translateY(-2px);
+    }
+
+    .foot {
+      margin-top: 3rem;
+      text-align: center;
+      font-family: monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: rgba(244, 233, 213, 0.35);
+    }
+
+    @media (max-width: 580px) {
+      .work { padding: 1.4rem 1.2rem 1.2rem; }
+      .work h2 { font-size: 1.45rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page">
+
+    <div class="tm">f u g e 0 x s o l</div>
+
+    <a class="back" href="index.html">← 返回主页</a>
+
+    <div class="head">
+      <h1>作品集</h1>
+      <span class="tagline">selected works &middot; interactive web</span>
+    </div>
+    <div class="divider"></div>
+
+    <section class="work">
+      <span class="num">01</span>
+      <h2>山河集</h2>
+      <div class="en">Mountains of China &middot; 3D Terrain Collection</div>
+      <p>
+        中国名山 3D 地形互动作品集。基于真实 DEM 高程数据与卫星影像贴图，
+        Three.js 实时渲染，可自由旋转、缩放、漫游山体与水系，在浏览器里以任意视角纵览群山。
+      </p>
+      <div class="tags">
+        <span>Three.js</span><span>DEM</span><span>卫星影像</span><span>WebGL</span>
+      </div>
+      <div class="go">
+        <a class="primary mirror-link" href="https://fuge0xsol.github.io/mountains-portfolio/"
+           data-gh="https://fuge0xsol.github.io/mountains-portfolio/"
+           data-cf="https://mountains-portfolio.pages.dev/" target="_blank" rel="noopener">
+          立即访问 ↗
+        </a>
+        <a href="https://github.com/fuge0xsol/mountains-portfolio" target="_blank" rel="noopener">
+          源码仓库
+        </a>
+      </div>
+    </section>
+
+    <section class="work">
+      <span class="num">02</span>
+      <h2>TrueMap</h2>
+      <div class="en">Population &amp; GDP Cartogram</div>
+      <p>
+        thetruesize 风格的交互世界地图：国界形状保持不变，面积按人口或 GDP 等比重标，
+        一眼看清世界力量的真实体量；支持切换真实尺寸模式，拖拽国家轮廓进行等面积对比。
+      </p>
+      <div class="tags">
+        <span>D3</span><span>TopoJSON</span><span>Cartogram</span><span>世界银行数据</span>
+      </div>
+      <div class="go">
+        <a class="primary mirror-link" href="https://fuge0xsol.github.io/truemap/"
+           data-gh="https://fuge0xsol.github.io/truemap/"
+           data-cf="https://truemap.pages.dev/" target="_blank" rel="noopener">
+          立即访问 ↗
+        </a>
+        <a href="https://github.com/fuge0xsol/truemap" target="_blank" rel="noopener">
+          源码仓库
+        </a>
+      </div>
+    </section>
+
+    <div class="foot">© fuge0xsol · built with ♥</div>
+
+  </div>
+
+  <script>
+    // 访客在哪套部署上，就跳同一套的镜像，避免跨平台
+    (function () {
+      var onCF = location.hostname.indexOf('.pages.dev') !== -1;
+      if (!onCF) return;
+      document.querySelectorAll('a.mirror-link').forEach(function (a) {
+        a.href = a.dataset.cf;
+      });
+    })();
+  </script>
+
+</body>
+</html>
